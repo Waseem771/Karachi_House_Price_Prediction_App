@@ -50,9 +50,23 @@ st.markdown("""
 # Cache data loading
 @st.cache_resource
 def load_and_prepare_data():
-    """Load and prepare the dataset"""
+    """Load and prepare the dataset from GitHub"""
     try:
-        df = pd.read_csv(r"G:\Pakistan_Property_data_set_ML_Training\Property_Pakistan_datas_set\Property_with_Feature_Engineering.csv")
+        # GitHub raw content URL
+        github_url = "https://raw.githubusercontent.com/Waseem771/Karachi_House_Price_Prediction_App/main/Property_with_Feature_Engineering.csv"
+
+        # Try to load from GitHub first
+        try:
+            df = pd.read_csv(github_url)
+        except:
+            # Fallback to local path if GitHub fails
+            try:
+                df = pd.read_csv(r"G:\Pakistan_Property_data_set_ML_Training\Property_Pakistan_datas_set\Property_with_Feature_Engineering.csv")
+            except:
+                # If both fail, show error
+                st.error("❌ Could not load data from GitHub or local storage. Please check your internet connection.")
+                return None
+
         df = df[df['city'] == 'Karachi'].copy()
 
         # Clean data
