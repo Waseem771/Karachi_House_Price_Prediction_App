@@ -3,9 +3,10 @@ import pandas as pd
 import numpy as np
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+import joblib
+import plotly.graph_objects as go
 import plotly.express as px
-import warnings
-warnings.filterwarnings('ignore')
 
 # Set page config
 st.set_page_config(
@@ -46,31 +47,43 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Cache data loading
-@st.cache_resource
+# Cache data loading (cache_data is correct for DataFrames, not cache_resource)
+@st.cache_data(show_spinner="📥 Loading data...")
 def load_and_prepare_data():
     """Load and prepare the dataset from GitHub"""
-    try:
-        # GitHub raw content URL - Replace with your repository URL
-        github_url = "https://raw.githubusercontent.com/Waseem771/Karachi_House_Price_Prediction_App/main/Property_with_Feature_Engineering.csv"
+    # Correct raw URL — the CSV lives inside the repo's /data folder
+    github_url = (
+        "https://raw.githubusercontent.com/Waseem771/"
+        "Karachi_House_Price_Prediction_App/main/data/"
+        "Property_with_Feature_Engineering.csv"
+    )
 
-        st.info("📥 Loading data from GitHub repository...")
+    # Local fallback — works if you deploy with a data/ folder alongside app.py
+    local_path = "data/Property_with_Feature_Engineering.csv"
 
-        # Try to load from GitHub
+    df = None
+    last_error = None
+
+    # 1) Try GitHub, with a couple of retries (large-file cold fetch can time out once)
+    for attempt in range(3):
         try:
-            df = pd.read_csv(github_url, on_bad_lines='skip')
-            st.success("✅ Data loaded from GitHub successfully!")
+            df = pd.read_csv(github_url)
+            break
         except Exception as e:
-            st.warning(f"⚠️ Could not load from GitHub. Error: {str(e)[:100]}")
-            # Fallback to local path for local development
-            try:
-                df = pd.read_csv(r"G:\Pakistan_Property_data_set_ML_Training\Property_Pakistan_datas_set\Property_with_Feature_Engineering.csv")
-                st.info("📂 Using local data file")
-            except:
-                st.error("❌ Could not load data from GitHub or local storage.")
-                return None
+            last_error = e
 
-        # Filter for Karachi
+    # 2) Fallback to a local copy shipped in the repo's data/ folder
+    if df is None:
+        try:
+            df = pd.read_csv(local_path)
+        except Exception as e:
+            last_error = e
+
+    if df is None:
+        st.error(f"❌ Could not load data from GitHub or local storage. Error: {last_error}")
+        return None
+
+    try:
         df = df[df['city'] == 'Karachi'].copy()
 
         # Clean data
@@ -89,7 +102,7 @@ def load_and_prepare_data():
 
         return df
     except Exception as e:
-        st.error(f"❌ Error loading data: {e}")
+        st.error(f"Error loading data: {e}")
         return None
 
 @st.cache_resource
@@ -117,17 +130,16 @@ def train_model(df):
 
         return model, X.columns.tolist(), r2_score, top_locs
     except Exception as e:
-        st.error(f"❌ Error training model: {e}")
+        st.error(f"Error training model: {e}")
         return None, None, None, None
 
 # Load data and train model
-with st.spinner('🔄 Loading data and training model...'):
-    df = load_and_prepare_data()
-    if df is not None:
-        model, feature_columns, r2_score, locations = train_model(df)
-    else:
-        st.error("Failed to load data. Please check your internet connection.")
-        st.stop()
+df = load_and_prepare_data()
+if df is not None:
+    model, feature_columns, r2_score, locations = train_model(df)
+else:
+    st.error("Failed to load data. Please check the file path.")
+    st.stop()
 
 # Sidebar
 st.sidebar.title("ℹ️ About This App")
@@ -147,8 +159,6 @@ st.sidebar.info("""
     **Data:** 60,000+ properties from Karachi
 
     **Algorithm:** Random Forest Regressor
-
-    **Repository:** https://github.com/Waseem771/Karachi_House_Price_Prediction_App
 """.format(r2_score))
 
 st.sidebar.divider()
@@ -322,7 +332,7 @@ with tab1:
                 st.info("No similar properties found in the dataset for exact comparison.")
 
         except Exception as e:
-            st.error(f"❌ Error making prediction: {e}")
+            st.error(f"Error making prediction: {e}")
 
 # ==================== TAB 2: MARKET ANALYSIS ====================
 with tab2:
@@ -564,7 +574,6 @@ with tab4:
 
     st.subheader("📞 Support")
     st.markdown("""
-    - **GitHub Repository**: https://github.com/Waseem771/Karachi_House_Price_Prediction_App
     - **Dataset**: 60,000+ properties from Karachi
     - **Model**: Random Forest Regressor (100 trees)
     - **Last Updated**: 2026-07-14
@@ -576,6 +585,6 @@ st.divider()
 st.markdown("""
     <div style='text-align: center; color: #666; padding: 20px;'>
         <p>🏠 <b>Karachi House Price Predictor</b> | Powered by Machine Learning</p>
-        <p>Made with ❤️ using Streamlit | <a href='https://github.com/Waseem771/Karachi_House_Price_Prediction_App'>GitHub Repository</a></p>
+        <p>Made with ❤️ using Streamlit</p>
     </div>
 """, unsafe_allow_html=True)
